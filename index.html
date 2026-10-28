@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XYRO Robot Face</title>
+
+<style>
+:root {
+  --amber: #ffbd27;
+  --bright: #ffe66a;
+  --cyan: #22cfff;
+  --dark-mouth: #0d121a;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+  background: radial-gradient(circle at center, #0a0d14 0%, #000206 100%);
+  font-family: Arial, sans-serif;
+  user-select: none;
+}
+
+body {
+  display: grid;
+  place-items: center;
+}
+
+.stage {
+  width: min(100vw, 100vh * 1.18);
+  height: min(100vh, 100vw / 1.18);
+  display: grid;
+  place-items: center;
+}
+
+svg {
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  filter: drop-shadow(0 0 35px rgba(0, 0, 0, 0.9));
+}
+
+/* Floating animation */
+.robot-head-group {
+  transform-origin: 400px 350px;
+  animation: floatHead 5s ease-in-out infinite;
+  transition: transform 0.5s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes floatHead {
+  0%, 100% { transform: translateY(0px) rotate(0deg); }
+  50% { transform: translateY(-7px) rotate(0.4deg); }
+}
+
+.detected .robot-head-group {
+  animation: excitedFloat 1.8s ease-in-out infinite alternate;
+}
+
+@keyframes excitedFloat {
+  0% { transform: translateY(-4px) scale(1.008); }
+  100% { transform: translateY(-10px) scale(1.018); }
+}
+
+/* Head shell & visor */
+.head-shell {
+  fill: url(#shellGradient);
+  stroke: #77839a;
+  stroke-width: 5;
+}
+
+.shell-highlight {
+  fill: none;
+  stroke: #aab5c9;
+  stroke-opacity: .45;
+  stroke-width: 2.5;
+}
+
+.visor {
+  fill: url(#visorGradient);
+  stroke: #2b3342;
+  stroke-width: 4;
+}
+
+.visor-glare {
+  fill: url(#glareGradient);
+  opacity: 0.14;
+  pointer-events: none;
+}
+
+/* Ears & lights */
+.ear {
+  fill: url(#shellGradient);
+  stroke: #5d687c;
+  stroke-width: 3.5;
+}
+
+.ear-light {
+  fill: none;
+  stroke: var(--amber);
+  stroke-width: 6;
+  filter: url(#glowAmber);
+  transition: stroke .3s ease, filter .3s ease;
+}
+
+.ear-ring {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 2.5;
+  opacity: 0;
+  transform-origin: center;
+  transition: opacity .4s ease;
+}
+
+.detected .ear-light {
+  stroke: var(--cyan);
+  filter: url(#glowCyan);
+}
+
+.detected .ear-ring {
+  opacity: 0.8;
+  animation: ringPulse 1.4s ease-out infinite;
+}
+
+@keyframes ringPulse {
+  0% { transform: scale(0.9); opacity: 0.8; }
+  100% { transform: scale(1.5); opacity: 0; }
+}
+
+/* Eyebrows */
+.brow {
+  fill: none;
+  stroke: var(--cyan);
+  stroke-width: 8;
+  stroke-linecap: round;
+  filter: url(#glowCyan);
+  transition: transform .4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  transform-origin: center;
+}
+
+.detected #browLeft {
+  transform: translateY(-12px) rotate(-9deg);
+}
+
+.detected #browRight {
+  transform: translateY(-12px) rotate(9deg);
+}
+
+/* Eyes */
+.eye-glow {
+  fill: var(--amber);
+  opacity: .32;
+  filter: url(#blur);
+  transition: fill .4s ease;
+}
+
+.eye {
+  fill: url(#eyeGradient);
+  stroke: #ffea79;
+  stroke-width: 2.5;
+  filter: url(#glowAmber);
+  transform-box: fill-box;
+  transform-origin: center;
+  transition: transform .35s ease;
+}
+
+.eye-ring {
+  fill: none;
+  stroke: #ff9e00;
+  stroke-width: 2;
+  opacity: 0.4;
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.eye-star {
+  fill: #ffffff;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  transform: scale(0) rotate(0deg);
+  transition: opacity .35s ease, transform .45s cubic-bezier(0.34, 1.56, 0.64, 1);
+  filter: url(#glowCyan);
+}
+
+.detected .eye-star {
+  opacity: 0.95;
+  transform: scale(1) rotate(45deg);
+}
+
+.eye-shine {
+  fill: none;
+  stroke: #ffffff;
+  stroke-width: 5;
+  stroke-linecap: round;
+}
+
+.blink .eye,
+.blink .eye-shine,
+.blink .eye-ring,
+.blink .eye-star {
+  transform: scaleY(.05) !important;
+}
+
+/* ========================================================
+   NEUTRAL CLOSED LIPS (VISIBLE WHEN NOT SMILING)
+   ======================================================== */
+.closed-mouth-group {
+  opacity: 1;
+  transform-origin: 400px 460px;
+  transform: scale(1);
+  transition: opacity 0.3s ease, transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.detected .closed-mouth-group {
+  opacity: 0;
+  transform: scale(0.6);
+  pointer-events: none;
+}
+
+/* Outer closed lip contour */
+.lip-contour {
+  fill: #121722;
+  stroke: #3a475d;
+  stroke-width: 3;
+}
+
+/* Bright neon seam line */
+.lip-seam {
+  fill: none;
+  stroke: var(--bright);
+  stroke-width: 7;
+  stroke-linecap: round;
+  filter: url(#glowAmber);
+}
+
+.lip-cap {
+  fill: var(--amber);
+  filter: url(#glowAmber);
+}
+
+/* ========================================================
+   OPEN MOUTH (VISIBLE WHEN SMILING)
+   ======================================================== */
+.open-mouth-group {
+  opacity: 0;
+  transform-origin: 400px 460px;
+  transform: scale(0.6) translateY(-8px);
+  transition: opacity .3s ease, transform .4s cubic-bezier(0.34, 1.56, 0.64, 1);
+  pointer-events: none;
+}
+
+.detected .open-mouth-group {
+  opacity: 1;
+  transform: scale(1) translateY(0);
+}
+
+.mouth-cavity {
+  fill: var(--dark-mouth);
+  stroke: var(--bright);
+  stroke-width: 6;
+  filter: url(#glowAmber);
+}
+
+.mouth-teeth {
+  fill: #ffffff;
+  opacity: 0.92;
+}
+
+/* Status indicator dot */
+.status-dot {
+  fill: #434d5b;
+  transition: fill .3s ease;
+}
+
+.detected .status-dot {
+  fill: var(--cyan);
+  filter: url(#glowCyan);
+}
+
+#cameraVideo {
+  display: none;
+}
+</style>
+</head>
+
+<body>
+
+<main class="stage">
+<svg id="robot" viewBox="0 0 800 700" role="img" aria-label="Interactive robot face">
+
+<defs>
+  <linearGradient id="shellGradient" x1="0" y1="0" x2="1" y2="1">
+    <stop offset="0" stop-color="#6f7b94"/>
+    <stop offset=".28" stop-color="#303746"/>
+    <stop offset=".65" stop-color="#141720"/>
+    <stop offset="1" stop-color="#4d576a"/>
+  </linearGradient>
+
+  <radialGradient id="visorGradient" cx="50%" cy="30%" r="80%">
+    <stop offset="0" stop-color="#161b26"/>
+    <stop offset=".68" stop-color="#07090e"/>
+    <stop offset="1" stop-color="#0e131d"/>
+  </radialGradient>
+
+  <linearGradient id="glareGradient" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0%" stop-color="#ffffff"/>
+    <stop offset="45%" stop-color="#ffffff" stop-opacity="0"/>
+  </linearGradient>
+
+  <linearGradient id="eyeGradient" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#fff49e"/>
+    <stop offset=".3" stop-color="#ffc73b"/>
+    <stop offset="1" stop-color="#ff9900"/>
+  </linearGradient>
+
+  <!-- Glowing Filters -->
+  <filter id="glowAmber" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="6" result="blurred"/>
+    <feMerge>
+      <feMergeNode in="blurred"/>
+      <feMergeNode in="SourceGraphic"/>
+    </feMerge>
+  </filter>
+
+  <filter id="glowCyan" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="5" result="blurred"/>
+    <feMerge>
+      <feMergeNode in="blurred"/>
+      <feMergeNode in="SourceGraphic"/>
+    </feMerge>
+  </filter>
+
+  <filter id="blur" x="-100%" y="-100%" width="300%" height="300%">
+    <feGaussianBlur stdDeviation="15"/>
+  </filter>
+
+  <clipPath id="mouthClip">
+    <path d="M 335,432 C 335,432 400,442 465,432 C 472,432 478,442 470,465 C 455,506 425,528 400,528 C 375,528 345,506 330,465 C 322,442 328,432 335,432 Z"/>
+  </clipPath>
+</defs>
+
+<g class="robot-head-group">
+  <!-- Side Ear Modules -->
+  <g>
+    <path class="ear" d="M105 282 Q83 287 79 316 L79 382 Q82 412 105 418 L139 409 L139 291 Z"/>
+    <ellipse class="ear-ring" cx="111" cy="350" rx="17" ry="26"/>
+    <ellipse class="ear-light" cx="111" cy="350" rx="10" ry="17"/>
+  </g>
+
+  <g>
+    <path class="ear" d="M695 282 Q717 287 721 316 L721 382 Q718 412 695 418 L661 409 L661 291 Z"/>
+    <ellipse class="ear-ring" cx="689" cy="350" rx="17" ry="26"/>
+    <ellipse class="ear-light" cx="689" cy="350" rx="10" ry="17"/>
+  </g>
+
+  <!-- Helmet Shell -->
+  <ellipse class="head-shell" cx="400" cy="350" rx="282" ry="253"/>
+  <ellipse class="shell-highlight" cx="400" cy="350" rx="267" ry="239"/>
+  <ellipse class="visor" cx="400" cy="350" rx="244" ry="211"/>
+
+  <!-- Visor Subtle Glare Reflection -->
+  <path class="visor-glare" d="M210 240 Q400 190 590 240 C570 210 490 160 400 160 C310 160 230 210 210 240 Z" />
+
+  <!-- Eyebrows -->
+  <path id="browLeft" class="brow" d="M255 248 Q295 218 340 244"/>
+  <path id="browRight" class="brow" d="M460 244 Q505 218 545 248"/>
+
+  <!-- Eyes -->
+  <g id="eyes">
+    <ellipse class="eye-glow" cx="290" cy="330" rx="55" ry="64"/>
+    <ellipse class="eye-glow" cx="510" cy="330" rx="55" ry="64"/>
+
+    <g>
+      <ellipse class="eye" cx="290" cy="330" rx="40" ry="52"/>
+      <ellipse class="eye-ring" cx="290" cy="330" rx="32" ry="43"/>
+      <path class="eye-star" d="M290 316 Q290 326 280 326 Q290 326 290 336 Q290 326 300 326 Q290 326 290 316 Z" />
+      <path class="eye-shine" d="M256 337 Q290 306 324 337"/>
+    </g>
+
+    <g>
+      <ellipse class="eye" cx="510" cy="330" rx="40" ry="52"/>
+      <ellipse class="eye-ring" cx="510" cy="330" rx="32" ry="43"/>
+      <path class="eye-star" d="M510 316 Q510 326 500 326 Q510 326 510 336 Q510 326 520 326 Q510 326 510 316 Z" />
+      <path class="eye-shine" d="M476 337 Q510 306 544 337"/>
+    </g>
+  </g>
+
+  <!-- ============================================= -->
+  <!-- 1. CLEAR CLOSED LIPS (DEFAULT WHEN NO FACE)   -->
+  <!-- ============================================= -->
+  <g id="closedMouth" class="closed-mouth-group">
+    <!-- Outer lip socket -->
+    <path class="lip-contour" d="M335 458 Q400 452 465 458 Q400 472 335 458 Z"/>
+    
+    <!-- Neon closed lip line -->
+    <path class="lip-seam" d="M342 460 Q400 458 458 460"/>
+    
+    <!-- Left & Right lip corner accents -->
+    <circle class="lip-cap" cx="340" cy="460" r="3.5"/>
+    <circle class="lip-cap" cx="460" cy="460" r="3.5"/>
+  </g>
+
+  <!-- ============================================= -->
+  <!-- 2. OPEN MOUTH SMILE (APPEARS WHEN FACE FOUND) -->
+  <!-- ============================================= -->
+  <g id="openMouth" class="open-mouth-group">
+    <path class="mouth-cavity" d="M 335,432 C 335,432 400,442 465,432 C 472,432 478,442 470,465 C 455,506 425,528 400,528 C 375,528 345,506 330,465 C 322,442 328,432 335,432 Z"/>
+    
+    <g clip-path="url(#mouthClip)">
+      <rect class="mouth-teeth" x="350" y="430" width="100" height="15" rx="5"/>
+    </g>
+  </g>
+
+  <!-- Visor Status Dot -->
+  <circle class="status-dot" cx="400" cy="558" r="4.5"/>
+</g>
+</svg>
+</main>
+
+<video id="cameraVideo" autoplay muted playsinline></video>
+
+<script type="module">
+import { FaceDetector, FilesetResolver } from "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14";
+
+const robot = document.getElementById("robot");
+const video = document.getElementById("cameraVideo");
+
+let detector = null;
+let animationFrame = null;
+let isSmiling = false;
+
+function setSmileState(detected) {
+  if (detected === isSmiling) return;
+  isSmiling = detected;
+  robot.classList.toggle("detected", isSmiling);
+}
+
+// Natural Blinking
+function scheduleBlink() {
+  const nextInterval = 2400 + Math.random() * 3200;
+  setTimeout(() => {
+    robot.classList.add("blink");
+    setTimeout(() => {
+      robot.classList.remove("blink");
+      scheduleBlink();
+    }, 150);
+  }, nextInterval);
+}
+
+// Vision Processing Loop
+function processVideo() {
+  if (!video.srcObject || !detector) return;
+
+  if (video.readyState >= HTMLMediaElement.HAVE_CURRENT_DATA) {
+    try {
+      const detectionResult = detector.detectForVideo(video, performance.now());
+      const hasFace = Boolean(detectionResult.detections && detectionResult.detections.length > 0);
+      setSmileState(hasFace);
+    } catch (_) {
+      // Keep loop running through transient frame glitches
+    }
+  }
+
+  animationFrame = requestAnimationFrame(processVideo);
+}
+
+async function initVisionAndCamera() {
+  try {
+    if (!navigator.mediaDevices?.getUserMedia) {
+      console.warn("Camera API requires HTTPS or a localhost server.");
+      return;
+    }
+
+    const visionFiles = await FilesetResolver.forVisionTasks(
+      "https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/wasm"
+    );
+
+    detector = await FaceDetector.createFromOptions(visionFiles, {
+      baseOptions: {
+        modelAssetPath: "https://storage.googleapis.com/mediapipe-models/face_detector/blaze_face_short_range/float16/latest/blaze_face_short_range.tflite",
+        delegate: "GPU"
+      },
+      runningMode: "VIDEO",
+      minDetectionConfidence: 0.5
+    });
+
+    const stream = await navigator.mediaDevices.getUserMedia({
+      audio: false,
+      video: {
+        facingMode: "user",
+        width: { ideal: 640 },
+        height: { ideal: 480 }
+      }
+    });
+
+    video.srcObject = stream;
+    await video.play();
+
+    processVideo();
+  } catch (err) {
+    console.warn("Camera init issue:", err.message || err);
+  }
+}
+
+window.addEventListener("DOMContentLoaded", () => {
+  initVisionAndCamera();
+  scheduleBlink();
+});
+
+window.addEventListener("pagehide", () => {
+  if (animationFrame) cancelAnimationFrame(animationFrame);
+  if (video.srcObject) {
+    video.srcObject.getTracks().forEach(track => track.stop());
+  }
+});
+</script>
+</body>
+</html>
