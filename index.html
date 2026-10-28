@@ -7,9 +7,12 @@
 
 <style>
 :root {
+  --blue-glow: #00d0ff;
+  --blue-bright: #6be4ff;
+  --blue-deep: #0077ff;
   --amber: #ffbd27;
   --bright: #ffe66a;
-  --dark-mouth: #0d121a;
+  --dark-mouth: #070e17;
 }
 
 * { 
@@ -35,6 +38,7 @@ body {
   justify-content: center;
 }
 
+/* Tablet responsive stage */
 .stage {
   width: 100vw;
   height: 100vh;
@@ -50,7 +54,7 @@ svg {
   max-width: 95vw;
   max-height: 90vh;
   overflow: visible;
-  filter: drop-shadow(0 0 25px rgba(255, 189, 39, 0.25));
+  filter: drop-shadow(0 0 30px rgba(0, 180, 255, 0.35));
 }
 
 /* Organic head breathing bob */
@@ -75,7 +79,7 @@ svg {
 }
 
 /* ========================================================
-   MODERN SLEEK EYEBROWS
+   CYBERPUNK SLEEK EYEBROWS
    ======================================================== */
 .brow-group {
   transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
@@ -90,12 +94,12 @@ svg {
 }
 
 .brow-main {
-  fill: var(--bright);
-  filter: url(#glowAmber);
+  fill: var(--blue-bright);
+  filter: url(#glowBlue);
 }
 
 .brow-accent {
-  fill: #fff8c4;
+  fill: #e0f9ff;
 }
 
 /* Joyful raised arches when smiling */
@@ -108,19 +112,19 @@ svg {
 }
 
 /* ========================================================
-   EYES
+   ELECTRIC BLUE EYES
    ======================================================== */
 .eye-glow {
-  fill: var(--amber);
-  opacity: 0.38;
+  fill: var(--blue-glow);
+  opacity: 0.45;
   filter: url(#blur);
 }
 
 .eye {
-  fill: url(#eyeGradient);
-  stroke: #ffea79;
+  fill: url(#blueEyeGradient);
+  stroke: #bbf3ff;
   stroke-width: 3;
-  filter: url(#glowAmber);
+  filter: url(#glowBlue);
   transform-box: fill-box;
   transform-origin: center;
   transition: transform 0.3s ease;
@@ -128,9 +132,9 @@ svg {
 
 .eye-ring {
   fill: none;
-  stroke: #ff9e00;
+  stroke: #0099ff;
   stroke-width: 2.5;
-  opacity: 0.45;
+  opacity: 0.6;
   transform-box: fill-box;
   transform-origin: center;
 }
@@ -149,7 +153,7 @@ svg {
   transform-origin: center;
   transform: scale(0) rotate(0deg);
   transition: opacity .35s ease, transform .45s cubic-bezier(0.34, 1.56, 0.64, 1);
-  filter: url(#glowAmber);
+  filter: url(#glowBlue);
 }
 
 .detected .eye-star {
@@ -166,7 +170,7 @@ svg {
 }
 
 /* ========================================================
-   NEUTRAL CLOSED LIPS (WHEN NO FACE DETECTED)
+   NEUTRAL CLOSED LIPS (RESTING STATE)
    ======================================================== */
 .closed-mouth-group {
   opacity: 1;
@@ -182,26 +186,26 @@ svg {
 }
 
 .lip-socket {
-  fill: #0c1017;
-  stroke: #252e3d;
+  fill: #060d16;
+  stroke: #16263b;
   stroke-width: 3;
 }
 
 .lip-seam {
   fill: none;
-  stroke: var(--bright);
+  stroke: var(--blue-bright);
   stroke-width: 8;
   stroke-linecap: round;
-  filter: url(#glowAmber);
+  filter: url(#glowBlue);
 }
 
 .lip-accent {
-  fill: var(--amber);
-  filter: url(#glowAmber);
+  fill: var(--blue-glow);
+  filter: url(#glowBlue);
 }
 
 /* ========================================================
-   OPEN MOUTH SMILE (WHEN FACE DETECTED)
+   OPEN MOUTH SMILE (FACE DETECTED)
    ======================================================== */
 .open-mouth-group {
   opacity: 0;
@@ -218,9 +222,9 @@ svg {
 
 .mouth-cavity {
   fill: var(--dark-mouth);
-  stroke: var(--bright);
+  stroke: var(--blue-bright);
   stroke-width: 7;
-  filter: url(#glowAmber);
+  filter: url(#glowBlue);
 }
 
 .mouth-teeth {
@@ -240,13 +244,16 @@ svg {
 <svg id="robot" viewBox="150 180 500 370" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Robot Eyes and Mouth">
 
 <defs>
-  <linearGradient id="eyeGradient" x1="0" y1="0" x2="0" y2="1">
-    <stop offset="0" stop-color="#fff5a5"/>
-    <stop offset=".3" stop-color="#ffc73b"/>
-    <stop offset="1" stop-color="#ff9900"/>
+  <!-- Electric Blue Radial/Linear Gradient -->
+  <linearGradient id="blueEyeGradient" x1="0" y1="0" x2="0" y2="1">
+    <stop offset="0" stop-color="#b8f4ff"/>
+    <stop offset=".25" stop-color="#38d4ff"/>
+    <stop offset=".75" stop-color="#0080ff"/>
+    <stop offset="1" stop-color="#0044aa"/>
   </linearGradient>
 
-  <filter id="glowAmber" x="-100%" y="-100%" width="300%" height="300%">
+  <!-- Blue Glow Filter -->
+  <filter id="glowBlue" x="-100%" y="-100%" width="300%" height="300%">
     <feGaussianBlur stdDeviation="7" result="blurred"/>
     <feMerge>
       <feMergeNode in="blurred"/>
@@ -255,7 +262,7 @@ svg {
   </filter>
 
   <filter id="blur" x="-100%" y="-100%" width="300%" height="300%">
-    <feGaussianBlur stdDeviation="18"/>
+    <feGaussianBlur stdDeviation="20"/>
   </filter>
 
   <clipPath id="mouthClip">
