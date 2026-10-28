@@ -1,0 +1,643 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gemini Live Assistant</title>
+
+<style>
+    * { box-sizing: border-box; }
+
+    body {
+        margin: 0;
+        font-family: Arial, sans-serif;
+        background: #10131b;
+        color: #f2f4fa;
+    }
+
+    .app {
+        max-width: 900px;
+        margin: auto;
+        padding: 24px;
+    }
+
+    h1 { margin-bottom: 6px; }
+    .muted { color: #a7afc2; font-size: 14px; }
+
+    input, textarea, button {
+        font: inherit;
+        border-radius: 10px;
+        padding: 12px;
+    }
+
+    input, textarea {
+        width: 100%;
+        color: white;
+        background: #202635;
+        border: 1px solid #424b60;
+        margin: 8px 0;
+    }
+
+    button {
+        border: 0;
+        cursor: pointer;
+        font-weight: bold;
+        background: #a9c7ff;
+        color: #101827;
+        margin: 4px;
+    }
+
+    button:disabled { opacity: .45; cursor: not-allowed; }
+
+    .panel {
+        background: #191e2a;
+        border: 1px solid #30384a;
+        padding: 16px;
+        border-radius: 16px;
+        margin-top: 16px;
+    }
+
+    .controls { display: flex; flex-wrap: wrap; gap: 4px; }
+
+    #status { color: #9ee6ba; margin-top: 12px; }
+
+    #camera {
+        width: 100%;
+        max-height: 350px;
+        object-fit: contain;
+        background: black;
+        border-radius: 12px;
+    }
+
+    #chat {
+        height: 300px;
+        overflow-y: auto;
+        padding: 10px;
+        background: #10141e;
+        border-radius: 10px;
+    }
+
+    .message {
+        margin: 10px 0;
+        padding: 10px;
+        border-radius: 10px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+    }
+
+    .user { background: #25334c; }
+    .gemini { background: #26372f; }
+
+    .warning { color: #ffd28a; font-size: 13px; }
+</style>
+</head>
+
+<body>
+<div class="app">
+    <h1>Gemini Live</h1>
+    <p class="muted">Real-time voice, text and camera assistant</p>
+
+    <div class="panel">
+        <label for="apiKey">Gemini API key</label>
+        <input id="apiKey" type="password"
+               placeholder="Paste your Gemini API key here"
+               autocomplete="off">
+
+        <label for="instructions">Assistant instructions</label>
+        <textarea id="instructions" rows="3">You are a friendly real-time AI assistant. Listen carefully, speak naturally and concisely, and describe what you see through the camera when relevant.</textarea>
+
+        <div class="controls">
+            <button id="connectBtn" onclick="connect()">Connect</button>
+            <button id="disconnectBtn" onclick="disconnect()" disabled>Disconnect</button>
+            <button id="micBtn" onclick="toggleMic()" disabled>Mute microphone</button>
+            <button id="cameraBtn" onclick="toggleCamera()" disabled>Turn camera off</button>
+        </div>
+
+        <div id="status">Disconnected</div>
+        <p class="warning">
+            Local prototype only. Do not publish this page or share your API key.
+        </p>
+    </div>
+
+    <div class="panel">
+        <h3>Camera</h3>
+        <video id="camera" autoplay playsinline muted></video>
+        <p class="muted">Camera frames are sent approximately once per second.</p>
+    </div>
+
+    <div class="panel">
+        <h3>Conversation</h3>
+        <div id="chat"></div>
+
+        <form id="textForm">
+            <input id="textInput" placeholder="Type a message..." autocomplete="off">
+            <button id="sendBtn" type="submit" disabled>Send message</button>
+        </form>
+    </div>
+</div>
+
+<script>
+const MODEL = "gemini-3.8-live";
+const WS_URL =
+    "wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContent";
+
+let ws = null;
+let audioContext = null;
+let micStream = null;
+let cameraStream = null;
+let micSource = null;
+let micProcessor = null;
+let cameraTimer = null;
+
+let connected = false;
+let micEnabled = true;
+let cameraEnabled = true;
+let nextPlayTime = 0;
+let activeAssistantMessage = null;
+
+const $ = id => document.getElementById(id);
+
+function setStatus(message) {
+    $("status").textContent = message;
+}
+
+function updateButtons() {
+    $("connectBtn").disabled = connected;
+    $("disconnectBtn").disabled = !connected;
+    $("micBtn").disabled = !connected;
+    $("cameraBtn").disabled = !connected;
+    $("sendBtn").disabled = !connected;
+
+    $("micBtn").textContent =
+        micEnabled ? "Mute microphone" : "Unmute microphone";
+
+    $("cameraBtn").textContent =
+        cameraEnabled ? "Turn camera off" : "Turn camera on";
+}
+
+function addMessage(role, text) {
+    if (!text || !text.trim()) return null;
+
+    const el = document.createElement("div");
+    el.className = "message " + role;
+
+    const label = document.createElement("strong");
+    label.textContent = role === "user" ? "You: " : "Gemini: ";
+
+    const content = document.createElement("span");
+    content.textContent = text;
+
+    el.appendChild(label);
+    el.appendChild(content);
+    $("chat").appendChild(el);
+    $("chat").scrollTop = $("chat").scrollHeight;
+
+    return content;
+}
+
+function appendAssistantText(text) {
+    if (!text) return;
+
+    if (!activeAssistantMessage) {
+        activeAssistantMessage = addMessage("gemini", text);
+    } else {
+        activeAssistantMessage.textContent += text;
+    }
+
+    $("chat").scrollTop = $("chat").scrollHeight;
+}
+
+function base64FromBytes(bytes) {
+    let binary = "";
+    const chunkSize = 8192;
+
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+        binary += String.fromCharCode(
+            ...bytes.subarray(i, i + chunkSize)
+        );
+    }
+
+    return btoa(binary);
+}
+
+function sendMessage(message) {
+    if (!ws || ws.readyState !== WebSocket.OPEN) return false;
+
+    ws.send(JSON.stringify(message));
+    return true;
+}
+
+async function connect() {
+    const apiKey = $("apiKey").value.trim();
+
+    if (!apiKey) {
+        alert("Enter your Gemini API key first.");
+        return;
+    }
+
+    try {
+        setStatus("Connecting to Gemini...");
+        $("connectBtn").disabled = true;
+
+        audioContext = new (
+            window.AudioContext || window.webkitAudioContext
+        )();
+
+        await audioContext.resume();
+
+        const url = WS_URL + "?key=" + encodeURIComponent(apiKey);
+        ws = new WebSocket(url);
+
+        ws.onopen = () => {
+            sendMessage({
+                setup: {
+                    model: "models/" + MODEL,
+                    generationConfig: {
+                        responseModalities: ["AUDIO"]
+                    },
+                    systemInstruction: {
+                        parts: [{
+                            text: $("instructions").value.trim()
+                        }]
+                    },
+                    inputAudioTranscription: {},
+                    outputAudioTranscription: {}
+                }
+            });
+
+            setStatus("Connected. Initializing Gemini...");
+        };
+
+        
+ws.onmessage = async event => {
+    try {
+        // WebSocket messages may arrive as Blob, ArrayBuffer, or string.
+        let messageText;
+
+        if (typeof event.data === "string") {
+            messageText = event.data;
+        } else if (event.data instanceof Blob) {
+            messageText = await event.data.text();
+        } else if (event.data instanceof ArrayBuffer) {
+            messageText = new TextDecoder().decode(event.data);
+        } else {
+            console.error("Unsupported WebSocket message type:", event.data);
+            return;
+        }
+
+        const data = JSON.parse(messageText);
+
+        if (data.setupComplete) {
+            connected = true;
+            updateButtons();
+            setStatus("Gemini ready. Starting microphone and camera...");
+
+            try {
+                await startMicrophone();
+                await startCamera();
+                setStatus("Live. Speak naturally or type a message.");
+            } catch (err) {
+                setStatus("Gemini connected, but media access failed: " + err.message);
+                console.error(err);
+            }
+            return;
+        }
+
+        if (data.error) {
+            setStatus("API error: " +
+                (data.error.message || JSON.stringify(data.error)));
+            console.error("Gemini API error:", data.error);
+            return;
+        }
+
+        await handleServerMessage(data);
+
+    } catch (err) {
+        console.error("Message processing error:", err);
+    }
+};
+
+        ws.onerror = () => {
+            setStatus("WebSocket error. Check your API key and API access.");
+        };
+
+        ws.onclose = event => {
+            connected = false;
+            stopMicrophone();
+            stopCamera();
+            updateButtons();
+
+            if (audioContext) {
+                audioContext.close().catch(console.error);
+                audioContext = null;
+            }
+
+            setStatus("Disconnected. Close code: " + event.code);
+        };
+
+    } catch (err) {
+        setStatus("Error: " + err.message);
+        $("connectBtn").disabled = false;
+        console.error(err);
+    }
+}
+
+async function handleServerMessage(data) {
+    const content = data.serverContent;
+    if (!content) return;
+
+    if (content.inputTranscription?.text) {
+        addMessage("user", content.inputTranscription.text);
+    }
+
+    if (content.outputTranscription?.text) {
+        appendAssistantText(content.outputTranscription.text);
+    }
+
+    if (content.modelTurn?.parts) {
+        for (const part of content.modelTurn.parts) {
+            if (part.text) {
+                appendAssistantText(part.text);
+            }
+
+            if (part.inlineData?.data &&
+                part.inlineData.mimeType?.startsWith("audio/pcm")) {
+                await playAudio(part.inlineData.data);
+            }
+        }
+    }
+
+    if (content.turnComplete) {
+        activeAssistantMessage = null;
+    }
+
+    if (content.interrupted) {
+        nextPlayTime = audioContext ? audioContext.currentTime : 0;
+    }
+}
+
+async function startMicrophone() {
+    if (!connected || micStream) return;
+
+    micStream = await navigator.mediaDevices.getUserMedia({
+        audio: {
+            channelCount: 1,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true
+        }
+    });
+
+    micSource = audioContext.createMediaStreamSource(micStream);
+
+    // ScriptProcessorNode is used to keep this prototype easy to run.
+    micProcessor = audioContext.createScriptProcessor(4096, 1, 1);
+
+    micProcessor.onaudioprocess = event => {
+        if (!connected || !micEnabled) return;
+
+        const input = event.inputBuffer.getChannelData(0);
+        const pcm = downsampleTo16k(input, audioContext.sampleRate);
+
+        sendMessage({
+            realtimeInput: {
+                audio: {
+                    mimeType: "audio/pcm;rate=16000",
+                    data: base64FromBytes(new Uint8Array(pcm.buffer))
+                }
+            }
+        });
+    };
+
+    micSource.connect(micProcessor);
+
+    // Keep the processing node running without playing microphone audio.
+    const silentGain = audioContext.createGain();
+    silentGain.gain.value = 0;
+
+    micProcessor.connect(silentGain);
+    silentGain.connect(audioContext.destination);
+}
+
+function downsampleTo16k(input, inputRate) {
+    if (inputRate === 16000) {
+        return floatTo16BitPCM(input);
+    }
+
+    const ratio = inputRate / 16000;
+    const outputLength = Math.floor(input.length / ratio);
+    const output = new Float32Array(outputLength);
+
+    for (let i = 0; i < outputLength; i++) {
+        const start = Math.floor(i * ratio);
+        const end = Math.min(
+            Math.floor((i + 1) * ratio),
+            input.length
+        );
+
+        let sum = 0;
+        for (let j = start; j < end; j++) {
+            sum += input[j];
+        }
+
+        output[i] = sum / Math.max(1, end - start);
+    }
+
+    return floatTo16BitPCM(output);
+}
+
+function floatTo16BitPCM(input) {
+    const output = new Int16Array(input.length);
+
+    for (let i = 0; i < input.length; i++) {
+        const sample = Math.max(-1, Math.min(1, input[i]));
+        output[i] = sample < 0
+            ? sample * 32768
+            : sample * 32767;
+    }
+
+    return output;
+}
+
+async function playAudio(base64) {
+    if (!audioContext) return;
+
+    const binary = atob(base64);
+    const samples = new Int16Array(binary.length / 2);
+
+    for (let i = 0; i < samples.length; i++) {
+        const lo = binary.charCodeAt(i * 2);
+        const hi = binary.charCodeAt(i * 2 + 1);
+        let value = (hi << 8) | lo;
+
+        if (value >= 32768) value -= 65536;
+        samples[i] = value;
+    }
+
+    const floats = new Float32Array(samples.length);
+
+    for (let i = 0; i < samples.length; i++) {
+        floats[i] = samples[i] / 32768;
+    }
+
+    const buffer = audioContext.createBuffer(1, floats.length, 24000);
+    buffer.copyToChannel(floats, 0);
+
+    const source = audioContext.createBufferSource();
+    source.buffer = buffer;
+    source.connect(audioContext.destination);
+
+    const now = audioContext.currentTime;
+
+    if (nextPlayTime < now) nextPlayTime = now;
+
+    source.start(nextPlayTime);
+    nextPlayTime += buffer.duration;
+}
+
+async function startCamera() {
+    if (!connected || cameraStream) return;
+
+    cameraStream = await navigator.mediaDevices.getUserMedia({
+        video: {
+            width: { ideal: 640 },
+            height: { ideal: 480 },
+            facingMode: "user"
+        },
+        audio: false
+    });
+
+    $("camera").srcObject = cameraStream;
+    await $("camera").play();
+
+    const canvas = document.createElement("canvas");
+    const ctx = canvas.getContext("2d");
+
+    cameraTimer = setInterval(() => {
+        if (!connected || !cameraEnabled) return;
+        if ($("camera").videoWidth === 0) return;
+
+        canvas.width = $("camera").videoWidth;
+        canvas.height = $("camera").videoHeight;
+
+        ctx.drawImage($("camera"), 0, 0, canvas.width, canvas.height);
+
+        canvas.toBlob(async blob => {
+            if (!blob || !connected || !cameraEnabled) return;
+
+            const bytes = new Uint8Array(await blob.arrayBuffer());
+
+            sendMessage({
+                realtimeInput: {
+                    video: {
+                        mimeType: "image/jpeg",
+                        data: base64FromBytes(bytes)
+                    }
+                }
+            });
+        }, "image/jpeg", 0.7);
+    }, 1000);
+}
+
+function stopMicrophone() {
+    if (micProcessor) {
+        micProcessor.disconnect();
+        micProcessor.onaudioprocess = null;
+        micProcessor = null;
+    }
+
+    if (micSource) {
+        micSource.disconnect();
+        micSource = null;
+    }
+
+    if (micStream) {
+        micStream.getTracks().forEach(track => track.stop());
+        micStream = null;
+    }
+}
+
+function stopCamera() {
+    if (cameraTimer) {
+        clearInterval(cameraTimer);
+        cameraTimer = null;
+    }
+
+    if (cameraStream) {
+        cameraStream.getTracks().forEach(track => track.stop());
+        cameraStream = null;
+    }
+
+    $("camera").srcObject = null;
+}
+
+function toggleMic() {
+    micEnabled = !micEnabled;
+    updateButtons();
+    setStatus(micEnabled ? "Microphone on." : "Microphone muted.");
+}
+
+async function toggleCamera() {
+    cameraEnabled = !cameraEnabled;
+
+    if (cameraEnabled && connected) {
+        try {
+            await startCamera();
+        } catch (err) {
+            cameraEnabled = false;
+            setStatus("Camera error: " + err.message);
+        }
+    }
+
+    updateButtons();
+    setStatus(cameraEnabled ? "Camera on." : "Camera paused.");
+}
+
+function disconnect() {
+    connected = false;
+    stopMicrophone();
+    stopCamera();
+
+    if (ws) {
+        const oldSocket = ws;
+        ws = null;
+        oldSocket.close();
+    }
+
+    if (audioContext) {
+        audioContext.close().catch(console.error);
+        audioContext = null;
+    }
+
+    updateButtons();
+    $("connectBtn").disabled = false;
+    setStatus("Disconnected.");
+}
+
+$("textForm").addEventListener("submit", event => {
+    event.preventDefault();
+
+    const input = $("textInput");
+    const message = input.value.trim();
+
+    if (!message || !connected) return;
+
+    addMessage("user", message);
+
+    const sent = sendMessage({
+        clientContent: {
+            turns: [{
+                role: "user",
+                parts: [{ text: message }]
+            }],
+            turnComplete: true
+        }
+    });
+
+    if (sent) input.value = "";
+});
+</script>
+</body>
+</html>
+
